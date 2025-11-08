@@ -37,8 +37,16 @@ class DeepMimicEnv(char_env.CharEnv):
         self._reward_root_pose_scale = env_config.get("reward_root_pose_scale")
         self._reward_root_vel_scale = env_config.get("reward_root_vel_scale")
         self._reward_key_pos_scale = env_config.get("reward_key_pos_scale")
-        
+
         self._visualize_ref_char = env_config.get("visualize_ref_char", True)
+
+        # Random force perturbation settings
+        self._enable_random_force = env_config.get("enable_random_force", False)
+        self._random_force_scale = torch.tensor(env_config.get("random_force_scale", [0.0, 0.0, 0.0]),
+                                                device=device, dtype=torch.float)
+        self._random_force_bodies = env_config.get("random_force_bodies", [])
+        self._random_force_probability = env_config.get("random_force_probability", 0.0)
+        self._random_force_decay = env_config.get("random_force_decay", 1.0)
         
         super().__init__(config=config, num_envs=num_envs, device=device,
                          visualize=visualize)
@@ -94,13 +102,63 @@ class DeepMimicEnv(char_env.CharEnv):
 
         joint_err_w = env_config.get("joint_err_w", None)
         self._parse_joint_err_weights(joint_err_w)
-        
+
+        # Build random force body IDs
+        if self._enable_random_force:
+            self._random_force_body_ids = self._build_body_ids_tensor(self._random_force_bodies)
+            # Initialize persistent force buffer for each environment
+            self._current_forces = torch.zeros(num_envs, 3, device=self._device, dtype=torch.float32)
+
         return
 
     def _load_motions(self, motion_file):
-        self._motion_lib = motion_lib.MotionLib(motion_file=motion_file, 
+        self._motion_lib = motion_lib.MotionLib(motion_file=motion_file,
                                                 kin_char_model=self._kin_char_model,
                                                 device=self._device)
+        return
+
+    def _pre_physics_step(self, actions):
+        super()._pre_physics_step(actions)
+        if self._enable_random_force:
+            self._apply_random_forces()
+        return
+
+    def _apply_random_forces(self):
+        """Apply random forces to upper body parts for robustness training."""
+        char_id = self._get_char_id()
+
+        # Decay existing forces
+        self._current_forces *= self._random_force_decay
+
+        # Randomly apply new forces based on probability
+        num_envs = self.get_num_envs()
+        apply_force_mask = torch.rand(num_envs, device=self._device) < self._random_force_probability
+
+        # Generate random force directions (uniform random in [-1, 1] for each axis)
+        random_directions = torch.rand(num_envs, 3, device=self._device) * 2.0 - 1.0
+
+        # Scale by force magnitude
+        new_forces = random_directions * self._random_force_scale.unsqueeze(0)
+
+        # Apply only where mask is True
+        self._current_forces[apply_force_mask] = new_forces[apply_force_mask]
+
+        # Debug logging (prints every 100 steps)
+        if hasattr(self, '_force_debug_counter'):
+            self._force_debug_counter += 1
+        else:
+            self._force_debug_counter = 0
+
+        if self._force_debug_counter % 100 == 0:
+            num_active = apply_force_mask.sum().item()
+            if num_active > 0:
+                avg_force = self._current_forces[apply_force_mask].abs().mean(dim=0)
+                print(f"Step {self._force_debug_counter}: {num_active}/{num_envs} envs with forces. Avg magnitude (X,Y,Z): [{avg_force[0]:.2f}, {avg_force[1]:.2f}, {avg_force[2]:.2f}]N")
+
+        # Apply forces to each target body
+        for body_id in self._random_force_body_ids:
+            self._engine.set_body_forces(None, char_id, body_id, self._current_forces)
+
         return
     
     def _parse_joint_err_weights(self, joint_err_w):
@@ -137,6 +195,10 @@ class DeepMimicEnv(char_env.CharEnv):
 
         if (self._enable_ref_char()):
             self._reset_ref_char(env_ids)
+
+        # Reset random forces for the reset environments
+        if self._enable_random_force:
+            self._current_forces[env_ids] = 0.0
 
         return
 
