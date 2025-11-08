@@ -37,7 +37,6 @@ env:
     reward_root_vel_scale: 1.0
     reward_key_pos_scale: 10.0
 
-    # Import shared random force configuration
     import_random_force_config: "random_force_config.yaml"
 
 
