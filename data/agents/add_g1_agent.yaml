@@ -21,7 +21,7 @@ test_episodes: 32
 normalizer_samples: 100000000
 
 update_epochs: 5
-batch_size: 4
+batch_size: 12
 td_lambda: 0.95
 ppo_clip_ratio: 0.2
 norm_adv_clip: 4.0
