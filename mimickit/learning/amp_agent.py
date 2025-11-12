@@ -139,6 +139,8 @@ class AMPAgent(ppo_agent.PPOAgent):
         disc_demo_grad = torch.autograd.grad(disc_demo_logit, norm_disc_obs_demo, grad_outputs=torch.ones_like(disc_demo_logit),
                                              create_graph=True, retain_graph=True, only_inputs=True)
         disc_demo_grad = disc_demo_grad[0]
+        # Clamp gradients to prevent explosion
+        disc_demo_grad = torch.clamp(disc_demo_grad, -10.0, 10.0)
         disc_demo_grad = torch.sum(torch.square(disc_demo_grad), dim=-1)
         disc_grad_penalty = torch.mean(disc_demo_grad)
         disc_loss += self._disc_grad_penalty * disc_grad_penalty
@@ -196,7 +198,9 @@ class AMPAgent(ppo_agent.PPOAgent):
             disc_inputs = {"disc_obs": norm_disc_obs}
             disc_logits = torch_util.eval_minibatch(self._model.eval_disc, disc_inputs, self._disc_eval_batch_size)
             disc_logits = disc_logits.squeeze(-1)
-            prob = 1 / (1 + torch.exp(-disc_logits)) 
+            # Clamp logits to prevent numerical overflow
+            disc_logits = torch.clamp(disc_logits, -10.0, 10.0)
+            prob = 1 / (1 + torch.exp(-disc_logits))
             disc_r = -torch.log(torch.maximum(1 - prob, torch.tensor(0.0001, device=self._device)))
             disc_r *= self._disc_reward_scale
         return disc_r
