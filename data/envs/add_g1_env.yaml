@@ -42,6 +42,7 @@ env:
     reward_key_pos_scale: 10.0
 
     import_random_force_config: "random_force_config.yaml"
+    force_curriculum: True
 
 
 engine:

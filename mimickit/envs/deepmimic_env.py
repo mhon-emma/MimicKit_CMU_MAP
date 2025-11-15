@@ -48,6 +48,8 @@ class DeepMimicEnv(char_env.CharEnv):
         self._random_force_probability = env_config.get("random_force_probability", 0.0)
         self._random_force_decay = env_config.get("random_force_decay", 1.0)
         self._visualize_forces = env_config.get("visualize_forces", False) and visualize
+        self._force_curriculum = env_config.get("force_curriculum", False)
+        self._global_step = 0
         
         super().__init__(config=config, num_envs=num_envs, device=device,
                          visualize=visualize)
@@ -120,6 +122,8 @@ class DeepMimicEnv(char_env.CharEnv):
 
     def _pre_physics_step(self, actions):
         super()._pre_physics_step(actions)
+        self._global_step += 1
+        # print(self._global_step)
         if self._enable_random_force:
             self._apply_random_forces()
         return
@@ -159,6 +163,12 @@ class DeepMimicEnv(char_env.CharEnv):
                 avg_force = self._current_forces[apply_force_mask].abs().mean(dim=0)
                 print(f"Step {self._force_debug_counter}: {num_active}/{num_envs} envs with forces. Avg magnitude (X,Y,Z): [{avg_force[0]:.2f}, {avg_force[1]:.2f}, {avg_force[2]:.2f}]N")
 
+        # Curriculum learning: increase force magnitude over time
+        if self._force_curriculum:
+            max_steps = 6000*32  # Define over how many steps to reach full force
+            curriculum_scale = min(1.0, self._global_step / max_steps)
+            self._current_forces *= curriculum_scale
+        
         # Apply forces to each target body
         for body_id in self._random_force_body_ids:
             self._engine.set_body_forces(None, char_id, body_id, self._current_forces)
