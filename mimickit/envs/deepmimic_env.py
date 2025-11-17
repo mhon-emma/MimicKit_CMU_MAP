@@ -140,10 +140,15 @@ class DeepMimicEnv(char_env.CharEnv):
         apply_force_mask = torch.rand(num_envs, device=self._device) < self._random_force_probability
 
         # Generate random force directions (uniform random in [-1, 1] for each axis)
-        random_directions = torch.rand(num_envs, 3, device=self._device) * 2.0 - 1.0
+        # random_directions = torch.rand(num_envs, 3, device=self._device) * 2.0 - 1.0
 
         # Scale by force magnitude
-        new_forces = random_directions * self._random_force_scale.unsqueeze(0)
+        # new_forces = random_directions * self._random_force_scale.unsqueeze(0)
+
+        magnitudes = torch.rand(num_envs, 1, device=self._device)  # 0..1
+        new_forces = torch.zeros(num_envs, 3, device=self._device)
+        new_forces[:, 2] = magnitudes[:, 0] * self._random_force_scale[2]  # Z only, sign from config
+
 
         # Apply only where mask is True
         self._current_forces[apply_force_mask] = new_forces[apply_force_mask]
