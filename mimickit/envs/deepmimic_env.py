@@ -111,6 +111,8 @@ class DeepMimicEnv(char_env.CharEnv):
             self._random_force_body_ids = self._build_body_ids_tensor(self._random_force_bodies)
             # Initialize persistent force buffer for each environment
             self._current_forces = torch.zeros(num_envs, 3, device=self._device, dtype=torch.float32)
+            # Track whether forces have been initialized for each environment
+            self._forces_initialized = torch.zeros(num_envs, device=self._device, dtype=torch.bool)
 
         return
 
@@ -129,32 +131,34 @@ class DeepMimicEnv(char_env.CharEnv):
         return
 
     def _apply_random_forces(self):
-        """Apply random forces to upper body parts for robustness training."""
+        """Apply constant forces to body parts for robustness training."""
         char_id = self._get_char_id()
-
-        # Decay existing forces
-        self._current_forces *= self._random_force_decay
-
-        # Randomly apply new forces based on probability
         num_envs = self.get_num_envs()
-        apply_force_mask = torch.rand(num_envs, device=self._device) < self._random_force_probability
 
-        # Generate random force directions (uniform random in [-1, 1] for each axis)
-        # random_directions = torch.rand(num_envs, 3, device=self._device) * 2.0 - 1.0
+        # Only initialize forces once per episode for environments that haven't been initialized
+        need_init_mask = ~self._forces_initialized
 
-        # Scale by force magnitude
-        # new_forces = random_directions * self._random_force_scale.unsqueeze(0)
+        if need_init_mask.any():
+            # Calculate curriculum scale if enabled
+            curriculum_scale = 1.0
+            if self._force_curriculum:
+                max_steps = 6000 * 32  # Define over how many steps to reach full force
+                curriculum_scale = min(1.0, self._global_step / max_steps)
 
-        magnitudes = torch.rand(num_envs, 1, device=self._device)  # 0..1
-        new_forces = torch.zeros(num_envs, 3, device=self._device)
-        new_forces[:, 2] = magnitudes[:, 0] * self._random_force_scale[2]  # Z only, sign from config
+            # Generate random force magnitudes only for uninitialized environments
+            magnitudes = torch.rand(num_envs, 1, device=self._device)  # 0..1
+            new_forces = torch.zeros(num_envs, 3, device=self._device)
+            # Apply curriculum scaling to the force scale
+            new_forces[:, 2] = magnitudes[:, 0] * self._random_force_scale[2] * curriculum_scale
 
+            # Set forces only for uninitialized environments
+            self._current_forces[need_init_mask] = new_forces[need_init_mask]
 
-        # Apply only where mask is True
-        self._current_forces[apply_force_mask] = new_forces[apply_force_mask]
+            # Mark these environments as initialized
+            self._forces_initialized[need_init_mask] = True
 
-        # Store which env has newly applied force for visualization
-        self._active_force_mask = apply_force_mask
+        # All environments have active forces (for visualization)
+        self._active_force_mask = self._forces_initialized.clone()
 
         # Debug logging (prints every 100 steps)
         if hasattr(self, '_force_debug_counter'):
@@ -163,17 +167,16 @@ class DeepMimicEnv(char_env.CharEnv):
             self._force_debug_counter = 0
 
         if self._force_debug_counter % 100 == 0:
-            num_active = apply_force_mask.sum().item()
+            num_active = self._forces_initialized.sum().item()
             if num_active > 0:
-                avg_force = self._current_forces[apply_force_mask].abs().mean(dim=0)
-                print(f"Step {self._force_debug_counter}: {num_active}/{num_envs} envs with forces. Avg magnitude (X,Y,Z): [{avg_force[0]:.2f}, {avg_force[1]:.2f}, {avg_force[2]:.2f}]N")
+                avg_force = self._current_forces[self._forces_initialized].abs().mean(dim=0)
+                curriculum_info = ""
+                if self._force_curriculum:
+                    max_steps = 6000 * 32
+                    curriculum_scale = min(1.0, self._global_step / max_steps)
+                    curriculum_info = f" [Curriculum: {curriculum_scale*100:.1f}%]"
+                print(f"Step {self._force_debug_counter}: {num_active}/{num_envs} envs with forces. Avg magnitude (X,Y,Z): [{avg_force[0]:.2f}, {avg_force[1]:.2f}, {avg_force[2]:.2f}]N{curriculum_info}")
 
-        # Curriculum learning: increase force magnitude over time
-        if self._force_curriculum:
-            max_steps = 6000*32  # Define over how many steps to reach full force
-            curriculum_scale = min(1.0, self._global_step / max_steps)
-            self._current_forces *= curriculum_scale
-        
         # Apply forces to each target body
         for body_id in self._random_force_body_ids:
             self._engine.set_body_forces(None, char_id, body_id, self._current_forces)
@@ -268,6 +271,7 @@ class DeepMimicEnv(char_env.CharEnv):
         # Reset random forces for the reset environments
         if self._enable_random_force:
             self._current_forces[env_ids] = 0.0
+            self._forces_initialized[env_ids] = False
 
         return
 
