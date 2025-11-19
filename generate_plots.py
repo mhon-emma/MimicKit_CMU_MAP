@@ -33,7 +33,7 @@ def create_figure1_episode_length(df, save_dir):
             label='Train', linewidth=2.5, color='#A23B72', alpha=0.9)
 
     # Highlight collapse region
-    ax.axvspan(3000, 7000, alpha=0.15, color='red', label='Mid-Training Collapse')
+    # ax.axvspan(3000, 7000, alpha=0.15, color='red', label='Mid-Training Collapse')
 
     ax.set_xlabel('Iteration', fontsize=12, fontweight='bold')
     ax.set_ylabel('Episode Length (steps)', fontsize=12, fontweight='bold')
