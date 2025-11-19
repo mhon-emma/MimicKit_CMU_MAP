@@ -49,6 +49,7 @@ class DeepMimicEnv(char_env.CharEnv):
         self._random_force_decay = env_config.get("random_force_decay", 1.0)
         self._visualize_forces = env_config.get("visualize_forces", False) and visualize
         self._force_curriculum = env_config.get("force_curriculum", False)
+        self._constant_force_magnitude = env_config.get("constant_force_magnitude", False)
         self._global_step = 0
         
         super().__init__(config=config, num_envs=num_envs, device=device,
@@ -145,8 +146,14 @@ class DeepMimicEnv(char_env.CharEnv):
                 max_steps = 6000 * 32  # Define over how many steps to reach full force
                 curriculum_scale = min(1.0, self._global_step / max_steps)
 
-            # Generate random force magnitudes only for uninitialized environments
-            magnitudes = torch.rand(num_envs, 1, device=self._device)  # 0..1
+            # Generate force magnitudes only for uninitialized environments
+            if self._constant_force_magnitude:
+                # Use constant magnitude (full force scale)
+                magnitudes = torch.ones(num_envs, 1, device=self._device)
+            else:
+                # Use random magnitude between 0 and 1
+                magnitudes = torch.rand(num_envs, 1, device=self._device)
+
             new_forces = torch.zeros(num_envs, 3, device=self._device)
             # Apply curriculum scaling to the force scale
             new_forces[:, 2] = magnitudes[:, 0] * self._random_force_scale[2] * curriculum_scale

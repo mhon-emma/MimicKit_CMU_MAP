@@ -2,15 +2,17 @@
 # This config is shared across different training methods (AMP, ADD, etc.)
 # Edit this file to change force settings for all training methods
 
-enable_random_force: True
+enable_random_force: False
 random_force_scale: [0.0, 0.0, -100.0]  # Maximum force magnitude in Newtons [x, y, z]
 random_force_bodies: ["left_wrist_yaw_link", "right_wrist_yaw_link"]  # Bodies to apply forces to
 visualize_forces: True  # Draw red arrows showing force direction (only when visualize=True)
+constant_force_magnitude: False  # If True, use exact force value; if False, random between 0 and force_scale
 
 # Curriculum learning settings
-force_curriculum: True  # Gradually increase force magnitude over training
+force_curriculum: False  # Gradually increase force magnitude over training
 # When True, forces start at 0% and reach 100% over 192,000 steps (6000 iters × 32 steps/iter)
 # Forces remain constant within each episode, but max magnitude increases over training
 
 # Note: Forces are constant for entire episode duration (no decay within episode)
-# Each episode gets a random force magnitude between 0 and (current_curriculum_scale × random_force_scale)
+# If constant_force_magnitude=True: Each episode gets exact force value (random_force_scale)
+# If constant_force_magnitude=False: Each episode gets random magnitude between 0 and (random_force_scale)
