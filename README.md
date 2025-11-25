@@ -6,7 +6,9 @@
   <img src="images/teaser_go2.gif" width="32%">
 </p>
 
-This framework provides a suite of motion imitation methods for training motion controllers. This codebase is designed to be clean and lightweight, with minimal dependencies. A more detailed overview of MimicKit is available in the [Starter Guide](https://arxiv.org/abs/2510.13794). This codebase includes implementations of:
+This framework provides a suite of motion imitation methods for training motion controllers. This codebase is designed to be clean and lightweight, with minimal dependencies. A more detailed overview of MimicKit is available in the [Starter Guide](https://arxiv.org/abs/2510.13794). We will also be releasing a more feature-rich and modular motion imitation framework, ProtoMotions (TBA early Dec 2025). 
+
+This codebase includes implementations of:
 - [DeepMimic](https://xbpeng.github.io/projects/DeepMimic/index.html)
 - [AMP](https://xbpeng.github.io/projects/AMP/index.html)
 - [ASE](https://xbpeng.github.io/projects/ASE/index.html)
@@ -20,13 +22,30 @@ We also include the following RL algorithms:
 
 ## Installation
 
-Install IsaacGym: https://developer.nvidia.com/isaac-gym
+This framework supports different simulator backends. First, install the simulator of your choice. We highly recommend using a package manager, like [Conda](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html), to create dedicated Python environments for each simulator.
 
-Install requirements:
+<details>
+<summary>Isaac Gym</summary>
+
+Install [Isaac Gym](https://developer.nvidia.com/isaac-gym).
+
+To use Isaac Gym, set [`engine_name`](data/envs/deepmimic_humanoid_env.yaml) in the environment configuration files to `isaac_gym`.
+</details>
+
+<details>
+<summary>Isaac Lab</summary>
+
+Install [Isaac Lab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
+
+To use Isaac Lab, set [`engine_name`](data/envs/deepmimic_humanoid_env.yaml) in the environment configuration files to `isaac_lab`.
+</details>
+
+After that, install the requirements:
 ```
 pip install -r requirements.txt
 ```
 Download assets and motion data from [here](https://1sfu-my.sharepoint.com/:u:/g/personal/xbpeng_sfu_ca/EclKq9pwdOBAl-17SogfMW0Bved4sodZBQ_5eZCiz9O--w?e=bqXBaa), then extract the contents into [`data/`](data/).
+
 
 ---
 
