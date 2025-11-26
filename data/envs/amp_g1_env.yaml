@@ -10,6 +10,7 @@ env:
     pose_termination: False
     enable_phase_obs: False
     enable_tar_obs: False
+    log_tracking_error: True
     num_disc_obs_steps: 10
     rand_reset: True
     zero_center_action: True
