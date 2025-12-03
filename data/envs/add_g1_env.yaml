@@ -13,7 +13,7 @@ env:
     enable_tar_obs: True
     num_phase_encoding: 4
     tar_obs_steps: [1, 2, 3]
-    num_disc_obs_steps: 1
+    num_disc_obs_steps: 4
     rand_reset: True
     zero_center_action: True
     log_tracking_error: True
@@ -42,8 +42,6 @@ env:
     reward_key_pos_scale: 10.0
 
     import_random_force_config: "random_force_config.yaml"
-    force_curriculum: False
-
 
 engine:
     engine_name: "isaac_gym"

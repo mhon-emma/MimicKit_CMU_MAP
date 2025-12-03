@@ -50,6 +50,7 @@ class DeepMimicEnv(char_env.CharEnv):
         self._visualize_forces = env_config.get("visualize_forces", False) and visualize
         self._force_curriculum = env_config.get("force_curriculum", False)
         self._constant_force_magnitude = env_config.get("constant_force_magnitude", False)
+        self._force_start_step = env_config.get("force_start_step", 3000)
         self._global_step = 0
         
         super().__init__(config=config, num_envs=num_envs, device=device,
@@ -136,6 +137,11 @@ class DeepMimicEnv(char_env.CharEnv):
         char_id = self._get_char_id()
         num_envs = self.get_num_envs()
 
+        # Do not apply any random forces for the first N global steps
+        # self._force_start_step = 3000 *32
+        if self._global_step <= self._force_start_step * 32:
+            return
+
         # Only initialize forces once per episode for environments that haven't been initialized
         need_init_mask = ~self._forces_initialized
 
@@ -143,20 +149,25 @@ class DeepMimicEnv(char_env.CharEnv):
             # Calculate curriculum scale if enabled
             curriculum_scale = 1.0
             if self._force_curriculum:
-                max_steps = 6000 * 32  # Define over how many steps to reach full force
-                curriculum_scale = min(1.0, self._global_step / max_steps)
+                max_steps = self._force_start_step * 32 # Define over how many steps to reach full force
+                # Ramp from 0 at force_start_step to 1 over max_steps
+                progress = (self._global_step - self._force_start_step * 32) / max_steps
+                progress = max(0.0, progress)
+                curriculum_scale = min(1.0, progress)
 
             # Generate force magnitudes only for uninitialized environments
             if self._constant_force_magnitude:
                 # Use constant magnitude (full force scale)
-                magnitudes = torch.ones(num_envs, 1, device=self._device)
+                magnitudes = torch.ones(num_envs, 3, device=self._device)
             else:
-                # Use random magnitude between 0 and 1
-                magnitudes = torch.rand(num_envs, 1, device=self._device)
+                # Use random magnitude betweeuuun 0 and 1
+                magnitudes = torch.rand(num_envs, 3, device=self._device)
 
             new_forces = torch.zeros(num_envs, 3, device=self._device)
+
+            signs = torch.where(torch.rand(num_envs, 3, device=self._device) < 0.5, -1.0, 1.0)
             # Apply curriculum scaling to the force scale
-            new_forces[:, 2] = magnitudes[:, 0] * self._random_force_scale[2] * curriculum_scale
+            new_forces = magnitudes * self._random_force_scale * signs * curriculum_scale
 
             # Set forces only for uninitialized environments
             self._current_forces[need_init_mask] = new_forces[need_init_mask]
