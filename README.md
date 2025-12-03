@@ -126,10 +126,10 @@ Motion retargeting can be done using [GMR](https://github.com/YanjieZe/GMR). A s
 ## Citation
 If you find this codebase helpful, please cite:
 ```
-@misc{
+@article{
       MimicKitPeng2025,
       title={MimicKit: A Reinforcement Learning Framework for Motion Imitation and Control}, 
-      author={Xue Bin Peng},
+      author={Peng, Xue Bin},
       year={2025},
       eprint={2510.13794},
       archivePrefix={arXiv},
