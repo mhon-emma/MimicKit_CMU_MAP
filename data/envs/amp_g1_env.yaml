@@ -1,7 +1,7 @@
 env_name: "amp"
 
 env:
-    char_file: "data/assets/g1/g1.xml"
+    char_file: "data/assets/g1/g1_with_box.xml"
     camera_mode: "track"
 
     episode_length: 10.0 # seconds
