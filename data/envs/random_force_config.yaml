@@ -1,6 +1,9 @@
 # Random force perturbation settings for robustness training
 # This config is shared across different training methods (AMP, ADD, etc.)
 # Edit this file to change force settings for all training methods
+#
+# NOTE: G1 environments use g1_with_box.xml which has a box attached to the right wrist
+# The box will move with the robot as it's part of the character model
 
 enable_random_force: True
 random_force_scale: [10.0, 10.0, 30.0]  # Maximum force magnitude in Newtons [x, y, z]
