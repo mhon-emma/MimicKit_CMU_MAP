@@ -1,0 +1,15 @@
+motions:
+  - file: "data/motions/g1_custom/walk1.pkl"
+    weight: 3.0
+  - file: "data/motions/g1_custom/walk2.pkl"
+    weight: 3.0
+  - file: "data/motions/g1_custom/walk3.pkl"
+    weight: 3.0
+  - file: "data/motions/g1_custom/walk4.pkl"
+    weight: 3.0
+  - file: "data/motions/g1_custom/walk5.pkl"
+    weight: 3.0
+  - file: "data/motions/g1_custom/walk6.pkl"
+    weight: 3.0
+  - file: "data/motions/g1_custom/walk7.pkl"
+    weight: 3.0

@@ -245,6 +245,98 @@ class TaskSteeringADDEnv(add_env.ADDEnv):
         self._update_task()
         return
 
+    def _update_disc_obs_demo(self, env_ids=None):
+        if (env_ids is None):
+            motion_ids = self._motion_ids
+        else:
+            motion_ids = self._motion_ids[env_ids]
+
+        motion_times0 = self._get_motion_times(env_ids)
+        disc_obs = self._compute_disc_obs_demo(motion_ids, motion_times0, env_ids)
+
+        if (env_ids is None):
+            self._disc_obs_demo_buf[:] = disc_obs
+        else:
+            self._disc_obs_demo_buf[env_ids] = disc_obs
+
+        return
+
+    def _compute_disc_obs_demo(self, motion_ids, motion_times0, env_ids=None):
+        root_pos, root_rot, root_vel, root_ang_vel, joint_rot, dof_vel, key_pos = self._fetch_disc_demo_data(motion_ids, motion_times0)
+        body_pos, body_rot = self._kin_char_model.forward_kinematics(root_pos, root_rot, joint_rot)
+
+        disc_obs = add_env.compute_disc_obs(root_pos=root_pos,
+                                            root_rot=root_rot,
+                                            root_vel=root_vel,
+                                            root_ang_vel=root_ang_vel,
+                                            joint_rot=joint_rot,
+                                            dof_vel=dof_vel,
+                                            body_pos=body_pos,
+                                            body_rot=body_rot,
+                                            global_obs=self._global_obs)
+
+        tar_dir, tar_speed, face_dir = self._get_task_commands(env_ids, motion_ids.shape[0])
+        task_obs = compute_steering_observations(root_rot=root_rot[..., -1, :],
+                                                 tar_dir=tar_dir,
+                                                 tar_speed=tar_speed,
+                                                 face_dir=face_dir)
+        disc_obs = torch.cat([disc_obs, task_obs], dim=-1)
+        return disc_obs
+
+    def _update_disc_obs(self, env_ids=None):
+        root_pos = self._disc_hist_root_pos.get_all()
+        root_rot = self._disc_hist_root_rot.get_all()
+        root_vel = self._disc_hist_root_vel.get_all()
+        root_ang_vel = self._disc_hist_root_ang_vel.get_all()
+        joint_rot = self._disc_hist_joint_rot.get_all()
+        dof_vel = self._disc_hist_dof_vel.get_all()
+
+        if (env_ids is not None):
+            root_pos = root_pos[env_ids]
+            root_rot = root_rot[env_ids]
+            root_vel = root_vel[env_ids]
+            root_ang_vel = root_ang_vel[env_ids]
+            joint_rot = joint_rot[env_ids]
+            dof_vel = dof_vel[env_ids]
+
+        body_pos, body_rot = self._kin_char_model.forward_kinematics(root_pos, root_rot, joint_rot)
+
+        disc_obs = add_env.compute_disc_obs(root_pos=root_pos,
+                                            root_rot=root_rot,
+                                            root_vel=root_vel,
+                                            root_ang_vel=root_ang_vel,
+                                            joint_rot=joint_rot,
+                                            dof_vel=dof_vel,
+                                            body_pos=body_pos,
+                                            body_rot=body_rot,
+                                            global_obs=self._global_obs)
+
+        tar_dir, tar_speed, face_dir = self._get_task_commands(env_ids, root_rot.shape[0])
+        task_obs = compute_steering_observations(root_rot=root_rot[..., -1, :],
+                                                 tar_dir=tar_dir,
+                                                 tar_speed=tar_speed,
+                                                 face_dir=face_dir)
+        disc_obs = torch.cat([disc_obs, task_obs], dim=-1)
+
+        if (env_ids is None):
+            self._disc_obs_buf[:] = disc_obs
+        else:
+            self._disc_obs_buf[env_ids] = disc_obs
+
+        return
+
+    def _get_task_commands(self, env_ids, batch_size):
+        if (env_ids is None):
+            # used when shapes are needed (e.g., get_disc_obs_space); fall back to the first env's command
+            tar_dir = self._tar_dir[0:1].repeat((batch_size, 1))
+            tar_speed = self._tar_speed[0:1].repeat((batch_size,))
+            face_dir = self._face_dir[0:1].repeat((batch_size, 1))
+        else:
+            tar_dir = self._tar_dir[env_ids]
+            tar_speed = self._tar_speed[env_ids]
+            face_dir = self._face_dir[env_ids]
+        return tar_dir, tar_speed, face_dir
+
     
 
 #####################################################################

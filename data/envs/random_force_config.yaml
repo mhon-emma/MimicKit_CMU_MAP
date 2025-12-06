@@ -6,10 +6,10 @@ enable_random_force: True
 random_force_scale: [10.0, 10.0, 30.0]  # Maximum force magnitude in Newtons [x, y, z]
 random_force_bodies: ["left_wrist_yaw_link", "right_wrist_yaw_link"]  # Bodies to apply forces to
 visualize_forces: True  # Draw red arrows showing force direction (only when visualize=True)
-constant_force_magnitude: True  # If True, use exact force value; if False, random between 0 and force_scale
+constant_force_magnitude: False  # If True, use exact force value; if False, random between 0 and force_scale
 
 # Curriculum learning settings
-force_curriculum: False  # Gradually increase force magnitude over training
+force_curriculum: True  # Gradually increase force magnitude over training
 # When True, forces start at 0% and reach 100% over 192,000 steps (6000 iters × 32 steps/iter) after the first 2000 global steps
 # Forces remain constant within each episode, but max magnitude increases over training as the curriculum progresses
 force_start_step: 3000
