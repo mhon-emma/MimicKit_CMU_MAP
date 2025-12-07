@@ -143,7 +143,7 @@ class ViewMotionEnv(char_env.CharEnv):
     def _get_char_color(self):
         engine_name = self._engine.get_name()
         if (engine_name == "isaac_lab"):
-            col = np.array([0.25, 0.4, 0.1]))
+            col = np.array([0.25, 0.4, 0.1])
         else:
             col = np.array([0.5, 0.9, 0.1])
         return col
