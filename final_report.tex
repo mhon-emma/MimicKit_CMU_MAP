@@ -72,19 +72,26 @@ Real-world robotic applications demand more than motion reproduction—they requ
 
 \subsection{Background: AMP and ADD}
 
-Both AMP and ADD use adversarial imitation learning where a discriminator $D$ tries to distinguish between policy-generated motions $s_\pi$ and reference motions $s_{ref}$, while the policy tries to fool the discriminator.
+Both AMP and ADD use adversarial imitation learning where a discriminator $D$ tries to distinguish between policy-generated motions and reference motions, while the policy learns to fool the discriminator. The discriminator is trained via adversarial loss while the policy is trained via reinforcement learning with discriminator-based rewards.
 
-\textbf{AMP} uses absolute state observations for discrimination:
+\textbf{AMP}~\citep{peng2021amp} uses absolute state observations for discrimination. The discriminator $D_\theta: \mathcal{S} \rightarrow [0,1]$ is trained to distinguish policy states from reference states using binary cross-entropy loss. The style reward is computed as:
 \begin{equation}
-D_{AMP}(s) = \sigma(f_\theta(s))
+r_{style}(s_t) = -\log(1 - D_\theta(s_t))
+\label{eq:amp_reward}
 \end{equation}
-where $s$ contains absolute positions, velocities, and rotations. The policy receives a style reward $r_{style} = \log(D(s)) - \log(1-D(s))$ encouraging it to match the reference motion distribution.
+where $s_t$ contains joint positions, velocities, and root information from the policy at time $t$. This reward encourages the policy to generate states that fool the discriminator (achieving $D_\theta(s_t) \rightarrow 1$).
 
-\textbf{ADD} uses differential observations:
+\textbf{ADD}~\citep{zhang2025add} uses differential observations computed as the difference between policy and reference states. The discriminator observes:
 \begin{equation}
-D_{ADD}(\Delta s) = \sigma(f_\theta(\Delta s))
+\mathbf{o}^{diff}_t = \phi(s^{\pi}_t, s^{ref}_t)
+\label{eq:add_obs}
 \end{equation}
-where $\Delta s = s_\pi - s_{ref}$ contains relative differences in root position, velocity, and body positions. This formulation is invariant to absolute positioning, potentially enabling better adaptation to external forces.
+where $\phi$ computes relative features including root position difference $\Delta \mathbf{p}_{root}$, root velocity difference $\Delta \mathbf{v}_{root}$, and relative body positions with respect to the root. The discriminator $D_\theta: \mathcal{O}^{diff} \rightarrow [0,1]$ is trained with the zero vector $\mathbf{0}$ as the only positive sample (representing perfect tracking) and error vectors $\mathbf{o}^{diff}_t$ from the policy as negative samples. The reward encourages minimizing the differential:
+\begin{equation}
+r_{style}(s^{\pi}_t, s^{ref}_t) = -\log(1 - D_\theta(\mathbf{o}^{diff}_t))
+\label{eq:add_reward}
+\end{equation}
+This differential formulation provides translation and rotation invariance, allowing policies to adapt their global position while maintaining relative motion patterns.
 
 \subsection{Force Perturbation Framework}
 
@@ -92,16 +99,17 @@ We extended the MimicKit codebase to support configurable force perturbations:
 
 \textbf{Random Force Model.} Forces are applied probabilistically with decay:
 \begin{align}
-\mathbf{f}_t &= \mathbf{f}_{t-1} \cdot \alpha_{decay} + \mathbf{f}_{new} \cdot \mathbb{I}(u < p_{force}) \\
-\mathbf{f}_{new} &\sim \mathcal{U}(-1, 1)^3 \odot \mathbf{s}_{force}
+\mathbf{f}_t &= \mathbf{f}_{t-1} \cdot \alpha_{decay} + \mathbf{f}_{new} \cdot \mathbb{I}(u < p_{force}) \label{eq:force_decay}\\
+\mathbf{f}_{new} &\sim \mathcal{U}(-1, 1)^3 \odot \mathbf{s}_{force} \label{eq:force_sample}
 \end{align}
-where $\alpha_{decay} \in [0,1]$ is the decay factor, $p_{force}$ is application probability, $\mathbf{s}_{force}$ is the force scale, and $u \sim \mathcal{U}(0,1)$.
+where $\alpha_{decay} \in [0,1]$ is the decay factor (we use 0.95), $p_{force}$ is application probability (0.2 per step), $\mathbf{s}_{force}$ is the force scale vector, and $u \sim \mathcal{U}(0,1)$. The indicator function $\mathbb{I}(\cdot)$ ensures forces are applied stochastically.
 
 \textbf{Curriculum Learning.} We gradually increase force magnitudes during training:
 \begin{equation}
 \mathbf{s}_{force}(t) = \min(\mathbf{s}_{max}, \mathbf{s}_{init} + \beta \cdot t)
+\label{eq:curriculum}
 \end{equation}
-where $\beta$ controls the rate of increase and $t$ is the training iteration.
+where $\beta$ controls the rate of increase, $t$ is the training iteration, and $\mathbf{s}_{max}$ is the target maximum force (e.g., [0, 0, 30N] or [10N, 10N, 30N]).
 
 \subsection{Box-Carrying Dataset Generation}
 
@@ -116,11 +124,17 @@ This generates naturalistic reference data where the lower body exhibits walking
 
 \subsection{Steering Task}
 
-We implemented a steering environment where the robot must follow target directions while maintaining motion style. The task reward combines:
+We implemented a steering environment where the robot must follow target directions while maintaining motion style. The task reward combines directional objectives:
 \begin{equation}
 r_{task} = w_{tar} \cdot r_{vel} + w_{face} \cdot r_{face}
+\label{eq:steering_task}
 \end{equation}
-where $r_{vel}$ rewards moving toward the target direction and $r_{face}$ rewards facing the target. This tests whether policies can generalize learned motions to directional control. We trained steering tasks for both AMP and ADD to evaluate their directional control capabilities under the learned motion priors.
+where $r_{vel} = \exp(-\|\mathbf{v} - v_{tar}\mathbf{d}_{tar}\|^2)$ rewards moving at target speed $v_{tar}$ in target direction $\mathbf{d}_{tar}$, and $r_{face} = \exp(-\|\mathbf{d}_{heading} - \mathbf{d}_{tar}\|^2)$ rewards facing the target direction. The total reward combines task and style objectives:
+\begin{equation}
+r_{total} = r_{task} + w_{style} \cdot r_{style}
+\label{eq:total_reward}
+\end{equation}
+We trained steering tasks for both AMP and ADD to evaluate their directional control capabilities under the learned motion priors.
 
 \section{Experimental Setup}
 
