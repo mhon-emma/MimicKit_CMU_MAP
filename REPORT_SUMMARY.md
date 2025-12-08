@@ -35,7 +35,7 @@ I've created a comprehensive final report in NeurIPS format based on your midter
 
 ### Key Updates from Midterm
 
-The final report incorporates these new developments I found in your code:
+The final report incorporates these new developments from your work:
 
 1. **Random Force Implementation** (`random_force_config.yaml`)
    - Probabilistic force application (20% per step)
@@ -43,18 +43,26 @@ The final report incorporates these new developments I found in your code:
    - Configurable force magnitudes (0-100N)
    - Force visualization support
 
-2. **Steering Task** (`amp_steering_humanoid_env.yaml`, `task_steering_env.py`)
+2. **Multi-Directional Force Configuration**
+   - [10N, 10N, 30N] forces in x, y, z axes
+   - Addresses single-axis overcompensation problem
+   - Encourages more balanced, natural compensation strategies
+   - Better generalization across force directions
+
+3. **Steering Task** (for both AMP and ADD)
    - Target direction following
    - Speed control (0.5-5.0 m/s)
    - Adaptive target changes (4-7 second intervals)
+   - ADD shows faster adaptation to directional control
 
-3. **Enhanced Analysis**
+4. **Enhanced Analysis**
    - Comparison table between AMP and ADD
    - Detailed discussion of overcompensation in ADD
    - Curriculum learning insights (30N vs 100N)
+   - Force diversity vs. force magnitude analysis
    - Specific failure mode analysis
 
-4. **Mathematical Formulations**
+5. **Mathematical Formulations**
    - Force decay equations
    - Curriculum progression formulas
    - Discriminator formulations for AMP/ADD
@@ -97,10 +105,12 @@ The report includes your team contributions from the midterm:
 
 The report emphasizes your main discoveries:
 
-1. **ADD trains faster but overcompensates** - Achieves stability in 5k iterations but uses unnatural poses
+1. **ADD trains faster but overcompensates** - Achieves stability in 5k iterations but uses unnatural poses with single-axis forces
 2. **AMP maintains quality but drifts** - Better motion naturalness but poor position tracking
 3. **Curriculum magnitude matters** - 30N curriculum generalizes better than 100N
 4. **Random force decay improves robustness** - Gradual force dissipation helps learning
+5. **Multi-directional forces reduce overcompensation** - [10N, 10N, 30N] configuration prevents axis-specific compensation strategies
+6. **Both methods support steering** - ADD shows faster task adaptation while maintaining motion style
 
 ## What Makes This Report Strong
 
