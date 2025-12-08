@@ -1,0 +1,368 @@
+\documentclass{article}
+
+\usepackage[final]{neurips_2024}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{subfigure}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\title{Robust Motion Imitation under Force Perturbations: \\ A Study of AMP and ADD on Humanoid Robots}
+
+\author{%
+  Anirudh Shrihari \\
+  Carnegie Mellon University\\
+  \texttt{ashriha2@andrew.cmu.edu} \\
+  \And
+  Prajwal Gurunath \\
+  Carnegie Mellon University\\
+  \texttt{pgurunat@andrew.cmu.edu} \\
+  \And
+  Manyung Emma Hon \\
+  Carnegie Mellon University\\
+  \texttt{mehon@andrew.cmu.edu} \\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Motion imitation learning methods for humanoid robots typically showcase impressive feats like parkour, dancing, and running, but these skills are often demonstrated in ideal conditions without real-world disturbances. We investigate the robustness of two adversarial imitation learning methods—Adversarial Motion Priors (AMP) and Adversarial Differential Discriminator (ADD)—when subjected to external force perturbations representing practical tasks such as carrying objects. Our goal is to train policies that maintain natural human-like gaits while handling box-carrying forces. We implemented a comprehensive evaluation framework including: (1) custom reference motions for the Unitree G1 humanoid simulating box-carrying poses, (2) curriculum-based force perturbation training with both constant and random forces, (3) force decay mechanisms for realistic dynamics, and (4) steering tasks for directional control under load. Our experiments show that ADD learns faster and achieves longer rollouts but tends to overcompensate with unnatural poses, while AMP maintains better motion quality but struggles with tracking accuracy under force. We provide insights into the trade-offs between these methods and propose improvements for robust real-world deployment.
+\end{abstract}
+
+\section{Introduction}
+
+Physics-based character animation and motion imitation have made remarkable progress with deep reinforcement learning~\citep{peng2018deepmimic,peng2021amp,zhang2025add}. Modern approaches can replicate complex human motions including acrobatics, dance, and athletic movements with high fidelity. However, these methods are typically evaluated in pristine simulation environments without the perturbations and disturbances common in real-world scenarios.
+
+Real-world robotic applications demand more than motion reproduction—they require robustness to external forces, payload handling, and environmental variations. A humanoid robot must maintain stability and natural movement while carrying objects, responding to unexpected pushes, or operating on varied terrain. This gap between impressive demonstrations and practical utility motivates our investigation.
+
+\textbf{Problem Formulation.} We focus on a specific but representative challenge: training humanoid robots to walk naturally while carrying a box. This task combines several difficulties: (1) continuous external forces on the end-effectors, (2) need to maintain human-like gait patterns from reference motions, and (3) robust recovery from varying force magnitudes. We evaluate two state-of-the-art adversarial imitation learning methods: AMP~\citep{peng2021amp} and ADD~\citep{zhang2025add}.
+
+\textbf{Contributions.} Our work makes the following contributions:
+\begin{itemize}
+\item A systematic evaluation of AMP and ADD under external force perturbations, including constant forces (box carrying) and random impulses
+\item Custom dataset generation for box-carrying reference motions on the Unitree G1 humanoid
+\item Curriculum learning framework for progressive force adaptation with configurable decay dynamics
+\item Implementation of random force perturbations and steering tasks extending the MimicKit framework
+\item Empirical analysis revealing distinct failure modes and trade-offs: ADD's speed vs. naturalness, AMP's quality vs. tracking accuracy
+\end{itemize}
+
+\section{Related Work}
+
+\textbf{Physics-Based Character Control.} DeepMimic~\citep{peng2018deepmimic} pioneered using deep RL for physics-based character animation by combining imitation rewards with task rewards. AMP~\citep{peng2021amp} introduced adversarial motion priors, using a discriminator to distinguish policy motion from reference motion without explicit pose tracking rewards. ASE~\citep{peng2022ase} extended this to learn reusable skill embeddings from large motion datasets.
+
+\textbf{Differential Discriminators.} ADD~\citep{zhang2025add} proposed using differential observations (relative differences between policy and reference) rather than absolute states for the discriminator. This approach enables the policy to track motion patterns while adapting to external forces or different morphologies.
+
+\textbf{Robustness in Motion Imitation.} While several works address domain randomization for sim-to-real transfer~\citep{peng2018sim}, systematic studies of external force robustness in adversarial imitation learning remain limited. Our work fills this gap by evaluating how discriminator formulations affect robustness to sustained external forces.
+
+\section{Methods}
+
+\subsection{Background: AMP and ADD}
+
+Both AMP and ADD use adversarial imitation learning where a discriminator $D$ tries to distinguish between policy-generated motions $s_\pi$ and reference motions $s_{ref}$, while the policy tries to fool the discriminator.
+
+\textbf{AMP} uses absolute state observations for discrimination:
+\begin{equation}
+D_{AMP}(s) = \sigma(f_\theta(s))
+\end{equation}
+where $s$ contains absolute positions, velocities, and rotations. The policy receives a style reward $r_{style} = \log(D(s)) - \log(1-D(s))$ encouraging it to match the reference motion distribution.
+
+\textbf{ADD} uses differential observations:
+\begin{equation}
+D_{ADD}(\Delta s) = \sigma(f_\theta(\Delta s))
+\end{equation}
+where $\Delta s = s_\pi - s_{ref}$ contains relative differences in root position, velocity, and body positions. This formulation is invariant to absolute positioning, potentially enabling better adaptation to external forces.
+
+\subsection{Force Perturbation Framework}
+
+We extended the MimicKit codebase to support configurable force perturbations:
+
+\textbf{Random Force Model.} Forces are applied probabilistically with decay:
+\begin{align}
+\mathbf{f}_t &= \mathbf{f}_{t-1} \cdot \alpha_{decay} + \mathbf{f}_{new} \cdot \mathbb{I}(u < p_{force}) \\
+\mathbf{f}_{new} &\sim \mathcal{U}(-1, 1)^3 \odot \mathbf{s}_{force}
+\end{align}
+where $\alpha_{decay} \in [0,1]$ is the decay factor, $p_{force}$ is application probability, $\mathbf{s}_{force}$ is the force scale, and $u \sim \mathcal{U}(0,1)$.
+
+\textbf{Curriculum Learning.} We gradually increase force magnitudes during training:
+\begin{equation}
+\mathbf{s}_{force}(t) = \min(\mathbf{s}_{max}, \mathbf{s}_{init} + \beta \cdot t)
+\end{equation}
+where $\beta$ controls the rate of increase and $t$ is the training iteration.
+
+\subsection{Box-Carrying Dataset Generation}
+
+We created reference motions for box-carrying by:
+\begin{enumerate}
+\item Starting with human walking motion retargeted to Unitree G1
+\item Locking shoulder, elbow, and wrist joints to a fixed pose (arms extended forward as if holding a box)
+\item Applying constant downward forces (0-100N) on wrist links to simulate box weight
+\end{enumerate}
+
+This generates naturalistic reference data where the lower body exhibits walking motion while upper body maintains a carrying pose.
+
+\subsection{Steering Task}
+
+We implemented a steering environment where the robot must follow target directions while maintaining motion style. The task reward combines:
+\begin{equation}
+r_{task} = w_{tar} \cdot r_{vel} + w_{face} \cdot r_{face}
+\end{equation}
+where $r_{vel}$ rewards moving toward the target direction and $r_{face}$ rewards facing the target. This tests whether policies can generalize learned motions to directional control.
+
+\section{Experimental Setup}
+
+\textbf{Environment.} We use Isaac Gym with the Unitree G1 humanoid (29 DoF) on flat terrain. Control frequency is 30Hz with simulation at 120Hz. Episode length is 10 seconds with early termination on falls.
+
+\textbf{Training Details.} We use PPO~\citep{schulman2017ppo} with 4096 parallel environments. For AMP, we applied gradient clipping (max norm 1.0) and reduced discriminator strength (loss weight 0.5, gradient penalty 0.5) to prevent discriminator dominance. Training runs for 20,000-25,000 iterations (2-3 billion samples, 15-20 GPU hours on RTX 4090).
+
+\textbf{Force Configurations.} We test three force scenarios:
+\begin{itemize}
+\item \textbf{Constant Light:} 30N downward force on wrists (simulating 3kg box)
+\item \textbf{Constant Heavy:} 100N downward force on wrists (simulating 10kg box)
+\item \textbf{Random + Constant:} 0-100N random forces with 0.95 decay plus constant weight
+\end{itemize}
+
+\textbf{Evaluation Metrics.} We measure:
+\begin{itemize}
+\item Episode length (surrogate for stability)
+\item Joint position error vs. reference motion
+\item End-effector position error (feet and hands)
+\item Root position and velocity tracking error
+\item Discriminator reward (style matching quality)
+\end{itemize}
+
+\section{Results}
+
+\subsection{Training Dynamics}
+
+\textbf{ADD Performance.} Figure~\ref{fig:add_results_part1} shows ADD training curves under 30N constant force. Key observations:
+\begin{itemize}
+\item Episode length saturates quickly (within 5000 iterations), reaching maximum rollout duration
+\item Discriminator maintains high loss, suggesting significant difference from reference despite successful rollouts
+\item Policy learns to compensate for forces but with non-naturalistic poses (e.g., raised arms)
+\end{itemize}
+
+\textbf{AMP Performance.} Figure~\ref{fig:amp_results_part1} shows AMP training under force perturbations. After hyperparameter tuning (gradient clipping, discriminator weakening):
+\begin{itemize}
+\item More gradual learning curve than ADD, reaching stability around 15,000 iterations
+\item Discriminator reward steadily increases, indicating better style matching
+\item Significant position drift during locomotion under moderate forces
+\end{itemize}
+
+\begin{figure}[t]
+    \centering
+    \subfigure[ADD episode length]{
+        \includegraphics[width=0.3\linewidth]{data/ADD/add_episode_length.png}
+        \label{fig:add_episode_length}
+    }
+    \subfigure[ADD discriminator]{
+        \includegraphics[width=0.3\linewidth]{data/ADD/add_discmetrics.png}
+    }
+    \subfigure[ADD losses]{
+        \includegraphics[width=0.3\linewidth]{data/ADD/add_losscurves.png}
+    }
+    \caption{\textbf{ADD training curves under 30N constant force.} Episode length saturates quickly (a), discriminator loss remains high (b), but policy converges (c).}
+    \label{fig:add_results_part1}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \subfigure[AMP episode length]{
+        \includegraphics[width=0.3\textwidth]{data/AMP/figure1_episode_length.png}
+        \label{fig:amp_episode_length}
+    }
+    \subfigure[AMP discriminator]{
+        \includegraphics[width=0.3\textwidth]{data/AMP/figure2_discriminator_metrics.png}
+    }
+    \subfigure[AMP losses]{
+        \includegraphics[width=0.3\textwidth]{data/AMP/figure3_loss_curves.png}
+    }
+    \caption{\textbf{AMP training curves under force perturbations.} More gradual learning (a), improving discriminator reward (b), and stable loss convergence (c).}
+    \label{fig:amp_results_part1}
+\end{figure}
+
+\subsection{Qualitative Analysis}
+
+\textbf{ADD Behavior.} Under 30N curriculum training, ADD produces stable walking but with unnatural compensation strategies:
+\begin{itemize}
+\item Arms raised above head to counterbalance forces
+\item Exaggerated leaning motions during gait
+\item Overcompensation: even with zero force, policy maintains defensive posture expecting force application
+\end{itemize}
+
+The 100N curriculum model exhibits more severe overcompensation, becoming unstable even without applied forces (Figure~\ref{fig:add_results}).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.95\linewidth]{data/ADD/DRLmidpointsim_drawio.png}
+    \caption{\textbf{ADD behavior under different force curricula.} 30N curriculum allows adaptation, but 100N curriculum causes overcompensation even at zero force.}
+    \label{fig:add_results}
+\end{figure}
+
+\textbf{AMP Behavior.} AMP maintains more natural-looking poses but exhibits:
+\begin{itemize}
+\item Significant drift in root position during walking
+\item Occasional stumbling under moderate forces
+\item Better recovery when forces are removed compared to ADD
+\end{itemize}
+
+Figure~\ref{fig:amp_results} shows that AMP can walk with light to moderate constant forces but experiences drift and instability with strong perturbations.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.95\linewidth]{data/AMP/amp.png}
+    \caption{\textbf{AMP behavior under constant forces.} Model trained with curriculum up to 100N shows reasonable walking with light forces but drifts and falls under strong forces.}
+    \label{fig:amp_results}
+\end{figure}
+
+\subsection{Comparative Analysis}
+
+Table~\ref{tab:comparison} summarizes the key differences between AMP and ADD under force perturbations.
+
+\begin{table}[t]
+\centering
+\caption{Comparison of AMP and ADD under force perturbations}
+\label{tab:comparison}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{AMP} & \textbf{ADD} \\
+\midrule
+Training speed & Slower (15k iter) & Faster (5k iter) \\
+Motion naturalness & Better & Worse (overcompensation) \\
+Position tracking & Significant drift & Better \\
+Stability under force & Moderate & Good \\
+Recovery after force & Good & Poor (persistent compensation) \\
+Max sustainable force & 30-50N & 50-100N \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+
+\subsection{Why ADD Overcompensates}
+
+ADD's differential discriminator observes $\Delta s = s_\pi - s_{ref}$, which includes differences in body positions and velocities. When constant forces are applied:
+
+\begin{enumerate}
+\item The policy learns any pose that maintains similar \emph{relative} motion patterns to the reference
+\item Raised arms or exaggerated leans can maintain differential consistency while better counterbalancing forces
+\item The curriculum creates an expectation of forces, leading to persistent compensation strategies
+\end{enumerate}
+
+This suggests ADD's translation invariance, while beneficial for some perturbations, may allow unnatural compensations that satisfy the discriminator.
+
+\subsection{Why AMP Struggles with Tracking}
+
+AMP's absolute discriminator observes full state $s$, requiring close matching to reference poses. Under external forces:
+
+\begin{enumerate}
+\item The policy must balance discriminator reward (match reference) with task reward (avoid falling)
+\item Forces cause accumulating root position errors that compound over time
+\item Gradient clipping and discriminator weakening (necessary for stability) reduce the corrective signal
+\end{enumerate}
+
+The trade-off is better motion quality but less robustness to sustained perturbations.
+
+\subsection{Curriculum Learning Insights}
+
+Our force curriculum reveals an important insight: the final curriculum force magnitude significantly affects generalization:
+
+\begin{itemize}
+\item \textbf{30N curriculum:} Produces policies that handle 0-40N robustly without overcompensation
+\item \textbf{100N curriculum:} Creates defensive policies that overcompensate even at zero force
+\end{itemize}
+
+This suggests the need for \emph{adaptive curricula} that reduce force magnitudes in later training to encourage natural poses when forces are absent.
+
+\subsection{Limitations and Future Work}
+
+\textbf{Current Limitations:}
+\begin{itemize}
+\item Evaluation limited to downward wrist forces; real box-carrying involves distributed forces
+\item Flat terrain only; uneven ground would compound challenges
+\item No real hardware validation; sim-to-real gap remains unquantified
+\item Limited analysis of failure modes (what specific forces cause falls?)
+\end{itemize}
+
+\textbf{Future Directions:}
+\begin{itemize}
+\item \textbf{Hybrid discriminators:} Combine ADD's robustness with AMP's quality via multi-scale discrimination
+\item \textbf{Force-aware curricula:} Include force magnitude as context input, with curriculum that increases then decreases forces
+\item \textbf{Explicit pose constraints:} Add soft constraints on unnatural joint configurations
+\item \textbf{Multi-task training:} Jointly train on steering, force perturbations, and terrain variations
+\item \textbf{Real robot deployment:} Evaluate on physical Unitree G1 with actual box-carrying tasks
+\end{itemize}
+
+\section{Conclusion}
+
+We presented a systematic study of AMP and ADD under external force perturbations, motivated by practical tasks like box-carrying. Our experiments reveal fundamental trade-offs between these approaches: ADD achieves greater robustness and faster learning but sacrifices motion naturalness through overcompensation strategies, while AMP maintains higher motion quality but struggles with position tracking under sustained forces.
+
+Our key findings include:
+\begin{enumerate}
+\item Differential discriminators (ADD) enable force adaptation but allow unnatural compensation poses
+\item Absolute discriminators (AMP) preserve motion quality but accumulate tracking errors under force
+\item Curriculum design critically affects generalization—overly aggressive curricula induce persistent defensive behaviors
+\item Random force decay mechanisms improve robustness without excessive overcompensation
+\end{enumerate}
+
+These insights inform the design of robust motion imitation systems for real-world humanoid robotics, where both naturalness and reliability under perturbations are essential. The extended MimicKit framework and evaluation protocols developed in this work provide a foundation for future research on robust physics-based character control.
+
+\section*{Acknowledgments}
+
+We thank the MimicKit authors for releasing their codebase and the course staff for valuable feedback. Computational resources were provided by Carnegie Mellon University.
+
+\bibliographystyle{plain}
+\begin{thebibliography}{10}
+
+\bibitem{peng2018deepmimic}
+Xue~Bin Peng, Pieter Abbeel, Sergey Levine, and Michiel van~de Panne.
+\newblock Deepmimic: Example-guided deep reinforcement learning of
+  physics-based character skills.
+\newblock {\em ACM Transactions on Graphics}, 37(4):1--14, 2018.
+
+\bibitem{peng2021amp}
+Xue~Bin Peng, Ze~Ma, Pieter Abbeel, Sergey Levine, and Angjoo Kanazawa.
+\newblock Amp: Adversarial motion priors for stylized physics-based character
+  control.
+\newblock {\em ACM Transactions on Graphics}, 40(4):1--15, 2021.
+
+\bibitem{peng2022ase}
+Xue~Bin Peng, Yunrong Guo, Lina Halper, Sergey Levine, and Sanja Fidler.
+\newblock Ase: Large-scale reusable adversarial skill embeddings for physically
+  simulated characters.
+\newblock {\em ACM Transactions on Graphics}, 41(4):1--16, 2022.
+
+\bibitem{zhang2025add}
+Ziyu Zhang, Sergey Bashkirov, Dun~Yang, Yi~Shi, Michael Taylor, and Xue~Bin
+  Peng.
+\newblock Physics-based motion imitation with adversarial differential
+  discriminators.
+\newblock In {\em SIGGRAPH Asia 2025 Conference Papers}, 2025.
+
+\bibitem{schulman2017ppo}
+John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
+\newblock Proximal policy optimization algorithms.
+\newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
+
+\bibitem{peng2018sim}
+Xue~Bin Peng, Marcin Andrychowicz, Wojciech Zaremba, and Pieter Abbeel.
+\newblock Sim-to-real transfer of robotic control with dynamics randomization.
+\newblock In {\em IEEE International Conference on Robotics and Automation},
+  pages 3803--3810, 2018.
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,98 @@
+% neurips_2024.sty - NeurIPS 2024 style file
+% This is a minimal stub for the NeurIPS 2024 conference style
+% For full functionality, download from https://neurips.cc/
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_2024}[2024/01/01 NeurIPS 2024 submission/camera-ready style file]
+
+% Declare options
+\newif\if@neuripsfinal\@neuripsfinalfalse
+\DeclareOption{final}{\@neuripsfinaltrue}
+\newif\if@neuripspreprint\@neuripspreprintfalse
+\DeclareOption{preprint}{\@neuripspreprinttrue}
+\newif\if@neuripsnonatbib\@neuripsnonatbibfalse
+\DeclareOption{nonatbib}{\@neuripsnonatbibtrue}
+\ProcessOptions\relax
+
+% Load natbib unless nonatbib option is set
+\if@neuripsnonatbib\else
+  \RequirePackage{natbib}
+\fi
+
+% Page layout
+\setlength{\oddsidemargin}{0.25in}
+\setlength{\evensidemargin}{0.25in}
+\setlength{\marginparwidth}{0.07 in}
+\setlength{\marginparsep}{0.04in}
+\setlength{\topmargin}{-0.5in}
+\setlength{\headheight}{12pt}
+\setlength{\headsep}{25pt}
+\setlength{\footskip}{30pt}
+\setlength{\textheight}{9.0in}
+\setlength{\textwidth}{6.0in}
+\setlength{\columnsep}{0.25in}
+
+% Title and author formatting
+\renewcommand\maketitle{%
+  \par
+  \begingroup
+    \renewcommand\thefootnote{\@fnsymbol\c@footnote}%
+    \def\@makefnmark{\rlap{\@textsuperscript{\normalfont\@thefnmark}}}%
+    \long\def\@makefntext##1{\parindent 1em\noindent
+            \hb@xt@1.8em{%
+                \hss\@textsuperscript{\normalfont\@thefnmark}}##1}%
+    \@maketitle
+    \@thanks
+  \endgroup
+  \setcounter{footnote}{0}%
+}
+
+\def\@maketitle{%
+  \newpage
+  \null
+  \vskip 2em%
+  \begin{center}%
+  \let \footnote \thanks
+    {\LARGE\bfseries \@title \par}%
+    \vskip 1.5em%
+    {\large
+      \lineskip .5em%
+      \@author
+    }%
+    \vskip 1em%
+  \end{center}%
+  \par
+  \vskip 1.5em}
+
+% Abstract environment
+\renewenvironment{abstract}%
+{\centerline{\large\bfseries Abstract}\vspace{0.7ex}\begin{quote}\small}
+{\par\end{quote}\vskip 1ex}
+
+% Section formatting
+\renewcommand\section{\@startsection{section}{1}{\z@}%
+                                   {-3.5ex \@plus -1ex \@minus -.2ex}%
+                                   {2.3ex \@plus.2ex}%
+                                   {\normalfont\Large\bfseries}}
+\renewcommand\subsection{\@startsection{subsection}{2}{\z@}%
+                                     {-3.25ex\@plus -1ex \@minus -.2ex}%
+                                     {1.5ex \@plus .2ex}%
+                                     {\normalfont\large\bfseries}}
+\renewcommand\subsubsection{\@startsection{subsubsection}{3}{\z@}%
+                                     {-3.25ex\@plus -1ex \@minus -.2ex}%
+                                     {1.5ex \@plus .2ex}%
+                                     {\normalfont\normalsize\bfseries}}
+\renewcommand\paragraph{\@startsection{paragraph}{4}{\z@}%
+                                    {3.25ex \@plus1ex \@minus.2ex}%
+                                    {-1em}%
+                                    {\normalfont\normalsize\bfseries}}
+
+% Footer
+\if@neuripspreprint
+  \newcommand{\neuripstext}{Preprint. Work in progress.}
+  \newcommand{\footnoterule}{}
+  \newcommand{\@oddfoot}{\hfill\neuripstext\hfill}
+  \newcommand{\@evenfoot}{\@oddfoot}
+\fi
+
+\endinput
