@@ -40,7 +40,7 @@
 \maketitle
 
 \begin{abstract}
-Motion imitation learning methods for humanoid robots typically showcase impressive feats like parkour, dancing, and running, but these skills are often demonstrated in ideal conditions without real-world disturbances. We investigate the robustness of two adversarial imitation learning methods—Adversarial Motion Priors (AMP) and Adversarial Differential Discriminator (ADD)—when subjected to external force perturbations representing practical tasks such as carrying objects. Our goal is to train policies that maintain natural human-like gaits while handling box-carrying forces. We implemented a comprehensive evaluation framework including: (1) custom reference motions for the Unitree G1 humanoid simulating box-carrying poses, (2) curriculum-based force perturbation training with both constant and random forces, (3) force decay mechanisms for realistic dynamics, and (4) steering tasks for directional control under load. Our experiments show that ADD learns faster and achieves longer rollouts but tends to overcompensate with unnatural poses, while AMP maintains better motion quality but struggles with tracking accuracy under force. We provide insights into the trade-offs between these methods and propose improvements for robust real-world deployment.
+Motion imitation learning methods for humanoid robots typically showcase impressive feats like parkour, dancing, and running, but these skills are often demonstrated in ideal conditions without real-world disturbances. We investigate the robustness of two adversarial imitation learning methods—Adversarial Motion Priors (AMP) and Adversarial Differential Discriminator (ADD)—when subjected to external force perturbations representing practical tasks such as carrying objects. Our goal is to train policies that maintain natural human-like gaits while handling box-carrying forces. We implemented a comprehensive evaluation framework including: (1) custom reference motions for the Unitree G1 humanoid simulating box-carrying poses, (2) curriculum-based force perturbation training with both constant and random forces, (3) force decay mechanisms for realistic dynamics, (4) multi-directional force configurations [10N, 10N, 30N] to mitigate overcompensation, and (5) steering tasks for both AMP and ADD to evaluate directional control under load. Our experiments show that ADD learns faster and achieves longer rollouts but tends to overcompensate with unnatural poses under single-axis forces, while AMP maintains better motion quality but struggles with tracking accuracy. Multi-directional force training significantly reduces overcompensation behaviors. We provide insights into the trade-offs between these methods and demonstrate effective strategies for robust real-world deployment.
 \end{abstract}
 
 \section{Introduction}
@@ -120,7 +120,7 @@ We implemented a steering environment where the robot must follow target directi
 \begin{equation}
 r_{task} = w_{tar} \cdot r_{vel} + w_{face} \cdot r_{face}
 \end{equation}
-where $r_{vel}$ rewards moving toward the target direction and $r_{face}$ rewards facing the target. This tests whether policies can generalize learned motions to directional control.
+where $r_{vel}$ rewards moving toward the target direction and $r_{face}$ rewards facing the target. This tests whether policies can generalize learned motions to directional control. We trained steering tasks for both AMP and ADD to evaluate their directional control capabilities under the learned motion priors.
 
 \section{Experimental Setup}
 
@@ -128,11 +128,12 @@ where $r_{vel}$ rewards moving toward the target direction and $r_{face}$ reward
 
 \textbf{Training Details.} We use PPO~\citep{schulman2017ppo} with 4096 parallel environments. For AMP, we applied gradient clipping (max norm 1.0) and reduced discriminator strength (loss weight 0.5, gradient penalty 0.5) to prevent discriminator dominance. Training runs for 20,000-25,000 iterations (2-3 billion samples, 15-20 GPU hours on RTX 4090).
 
-\textbf{Force Configurations.} We test three force scenarios:
+\textbf{Force Configurations.} We test four force scenarios:
 \begin{itemize}
 \item \textbf{Constant Light:} 30N downward force on wrists (simulating 3kg box)
 \item \textbf{Constant Heavy:} 100N downward force on wrists (simulating 10kg box)
 \item \textbf{Random + Constant:} 0-100N random forces with 0.95 decay plus constant weight
+\item \textbf{Multi-Directional:} [10N, 10N, 30N] forces in x, y, z axes to reduce single-axis overcompensation
 \end{itemize}
 
 \textbf{Evaluation Metrics.} We measure:
@@ -203,7 +204,7 @@ where $r_{vel}$ rewards moving toward the target direction and $r_{face}$ reward
 \item Overcompensation: even with zero force, policy maintains defensive posture expecting force application
 \end{itemize}
 
-The 100N curriculum model exhibits more severe overcompensation, becoming unstable even without applied forces (Figure~\ref{fig:add_results}).
+The 100N curriculum model exhibits more severe overcompensation, becoming unstable even without applied forces (Figure~\ref{fig:add_results}). To mitigate this issue, we trained with multi-directional forces [10N, 10N, 30N] which significantly reduced single-axis overcompensation behaviors.
 
 \begin{figure}[t]
     \centering
@@ -230,7 +231,7 @@ Figure~\ref{fig:amp_results} shows that AMP can walk with light to moderate cons
 
 \subsection{Comparative Analysis}
 
-Table~\ref{tab:comparison} summarizes the key differences between AMP and ADD under force perturbations.
+Table~\ref{tab:comparison} summarizes the key differences between AMP and ADD under force perturbations. Both methods were also evaluated on steering tasks, where they demonstrated the ability to follow target directions while maintaining learned motion styles, with ADD showing faster adaptation to directional control.
 
 \begin{table}[t]
 \centering
@@ -278,14 +279,23 @@ The trade-off is better motion quality but less robustness to sustained perturba
 
 \subsection{Curriculum Learning Insights}
 
-Our force curriculum reveals an important insight: the final curriculum force magnitude significantly affects generalization:
+Our force curriculum reveals important insights about force magnitude and directionality:
 
+\textbf{Force Magnitude Effects:}
 \begin{itemize}
 \item \textbf{30N curriculum:} Produces policies that handle 0-40N robustly without overcompensation
 \item \textbf{100N curriculum:} Creates defensive policies that overcompensate even at zero force
 \end{itemize}
 
-This suggests the need for \emph{adaptive curricula} that reduce force magnitudes in later training to encourage natural poses when forces are absent.
+\textbf{Multi-Directional Forces:} To address the overcompensation problem observed in single-axis (downward-only) training, we experimented with multi-directional forces [10N, 10N, 30N] applied in x, y, and z axes. This configuration:
+\begin{itemize}
+\item Prevents the policy from learning axis-specific compensation strategies (e.g., raising arms for downward forces)
+\item Encourages more balanced, natural responses to perturbations
+\item Reduces persistent overcompensation when forces are absent
+\item Results in better generalization across different force directions
+\end{itemize}
+
+This suggests that \emph{force diversity} during training is as important as force magnitude. Policies trained with multi-directional perturbations develop more robust and natural-looking compensation strategies compared to single-axis training.
 
 \subsection{Limitations and Future Work}
 
@@ -316,6 +326,8 @@ Our key findings include:
 \item Absolute discriminators (AMP) preserve motion quality but accumulate tracking errors under force
 \item Curriculum design critically affects generalization—overly aggressive curricula induce persistent defensive behaviors
 \item Random force decay mechanisms improve robustness without excessive overcompensation
+\item Multi-directional forces [10N, 10N, 30N] significantly reduce axis-specific overcompensation compared to single-axis perturbations
+\item Both AMP and ADD successfully integrate steering capabilities, with ADD showing faster task adaptation
 \end{enumerate}
 
 These insights inform the design of robust motion imitation systems for real-world humanoid robotics, where both naturalness and reliability under perturbations are essential. The extended MimicKit framework and evaluation protocols developed in this work provide a foundation for future research on robust physics-based character control.
