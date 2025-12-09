@@ -257,7 +257,9 @@ To address this issue, we trained ADD with [10N, 10N, 30N] multi-directional for
 \end{figure}
 
 \paragraph{AMP: Better Pose Tracking, Lower Force Robustness}
-AMP maintains more natural-looking poses and better pose tracking accuracy but exhibits lower force robustness:
+AMP maintains more natural-looking poses and better pose tracking accuracy but exhibits lower force robustness. We trained AMP with the same three force configurations as ADD to enable direct comparison:
+
+\textbf{Single-axis forces [0,0,30N] and [0,0,100N]:}
 \begin{itemize}
 \item Significant drift in root position during walking under force
 \item Occasional stumbling and falls under moderate forces (>40N)
@@ -265,7 +267,14 @@ AMP maintains more natural-looking poses and better pose tracking accuracy but e
 \item Maintains closer match to reference motion (higher discriminator rewards)
 \end{itemize}
 
-Figure~\ref{fig:amp_results} shows that AMP can walk with light constant forces but experiences drift and instability with strong perturbations, confirming the trade-off between pose tracking accuracy and force robustness.
+\textbf{Multi-directional forces [10,10,30N]:}
+\begin{itemize}
+\item Improved stability compared to single-axis training
+\item Still exhibits position drift, making it less suitable for directional control
+\item Maintains natural pose quality across all force magnitudes
+\end{itemize}
+
+Figure~\ref{fig:amp_results} shows that AMP can walk with light constant forces but experiences drift and instability with strong perturbations, confirming the trade-off between pose tracking accuracy and force robustness across all training configurations.
 
 \begin{figure}[t]
     \centering
@@ -279,11 +288,11 @@ Figure~\ref{fig:amp_results} shows that AMP can walk with light constant forces 
 We now quantify the performance differences across force configurations and methods.
 
 \paragraph{Pose Tracking and Stability Metrics}
-Table~\ref{tab:pose_tracking} presents pose tracking error and episode length across force magnitudes. Key findings:
+Table~\ref{tab:pose_tracking} presents pose tracking error and episode length across force magnitudes for both AMP and ADD trained with all three force configurations. Key findings:
 \begin{itemize}
-\item ADD maintains lower pose tracking error under force but higher error at 0N (overcompensation)
-\item Multi-directional training [10,10,30] reduces 0N pose error while maintaining robustness
-\item AMP shows superior pose tracking at 0N but rapid degradation under force
+\item \textbf{AMP}: Excellent pose tracking at 0N across all configs, but rapid degradation under force; multi-directional training provides modest improvement
+\item \textbf{ADD}: Lower pose tracking error under force but higher error at 0N with single-axis training (overcompensation)
+\item \textbf{Multi-directional benefit}: [10,10,30] training reduces ADD's 0N pose error while maintaining robustness; AMP shows smaller improvement but still drifts
 \end{itemize}
 
 \begin{table}[h]
@@ -295,13 +304,17 @@ Table~\ref{tab:pose_tracking} presents pose tracking error and episode length ac
 \textbf{Method} & \textbf{0N} & \textbf{30N} & \textbf{50N} & \textbf{100N} \\
 \midrule
 \multicolumn{5}{l}{\textit{Pose Tracking Error (degrees)}} \\
+AMP [0,0,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 AMP [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
+AMP [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 ADD [0,0,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 ADD [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
 ADD [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 \midrule
 \multicolumn{5}{l}{\textit{Episode Length (seconds)}} \\
+AMP [0,0,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 AMP [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
+AMP [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 ADD [0,0,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 ADD [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
 ADD [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
@@ -309,7 +322,7 @@ ADD [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
 \end{tabular}
 \end{table}
 
-% TODO: Fill in table with your experimental data
+% TODO: Fill in table with your experimental data for both AMP and ADD across all force configs
 
 \paragraph{Method Comparison}
 Table~\ref{tab:comparison} summarizes the key differences between AMP and ADD under force perturbations. Both methods were also evaluated on steering tasks, where they demonstrated the ability to follow target directions while maintaining learned motion styles, with ADD showing faster adaptation to directional control.
