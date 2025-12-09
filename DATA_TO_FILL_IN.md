@@ -49,10 +49,12 @@ Your report is now structured as a **coherent story**. Here's what you need to a
 - Episode length (mean ± std in seconds)
 
 **Configurations to test**:
-1. AMP [0,0,100]
-2. ADD [0,0,30]
-3. ADD [0,0,100]
-4. ADD [10,10,30]
+1. AMP [0,0,30]
+2. AMP [0,0,100]
+3. AMP [10,10,30]
+4. ADD [0,0,30]
+5. ADD [0,0,100]
+6. ADD [10,10,30]
 
 **Current table structure**:
 ```latex
@@ -60,7 +62,12 @@ Your report is now structured as a **coherent story**. Here's what you need to a
 \toprule
 \textbf{Method} & \textbf{0N} & \textbf{30N} & \textbf{50N} & \textbf{100N} \\
 \midrule
+AMP [0,0,30] & -- ± -- & -- ± -- & -- ± -- & -- \\
 AMP [0,0,100] & -- ± -- & -- ± -- & -- ± -- & -- ± -- \\
+AMP [10,10,30] & -- ± -- & -- ± -- & -- ± -- & -- \\
+ADD [0,0,30] & -- ± -- & -- ± -- & -- ± -- & -- \\
+ADD [0,0,100] & -- ± -- & -- ± -- & -- ± -- & -- ± -- \\
+ADD [10,10,30] & -- ± -- & -- ± -- & -- ± -- & -- \\
 ...
 ```
 
