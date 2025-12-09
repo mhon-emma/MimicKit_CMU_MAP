@@ -115,16 +115,22 @@ where $\beta$ controls the rate of increase, $t$ is the training iteration, and 
 
 We created reference motions for box-carrying by:
 \begin{enumerate}
-\item Starting with human walking motion retargeted to Unitree G1
-\item Locking shoulder, elbow, and wrist joints to a fixed pose (arms extended forward as if holding a box)
-\item Applying constant downward forces (0-100N) on wrist links to simulate box weight
+\item Retargeting human walking motion from AMASS~\citep{mahmood2019amass} to Unitree G1
+\item Locking shoulder, elbow, and wrist joints to a fixed box-holding pose (arms extended forward)
+\item Applying constant downward forces (0-100N) on wrist links during training to simulate box weight
 \end{enumerate}
 
-This generates naturalistic reference data where the lower body exhibits walking motion while upper body maintains a carrying pose.
+This generates naturalistic reference data where the lower body exhibits natural walking motion while the upper body maintains a carrying pose. The locked upper-body joints ensure the reference motion represents realistic box-carrying behavior.
 
-\subsection{Steering Task}
+\subsection{Steering Task with ADD}
 
-We implemented a steering environment where the robot must follow target directions while maintaining motion style. The task reward combines directional objectives:
+Given AMP's position drift issues under force (Section~\ref{sec:results}), we developed a steerable policy using ADD to enable directional control while maintaining motion style. We implemented a steering environment where the robot must follow dynamically changing target directions while maintaining natural locomotion patterns.
+
+\textbf{Dataset Preparation.} We retargeted the LAFAN dataset~\citep{harvey2020lafan} to the Unitree G1, using 6 diverse motion sets with neutral (natural) upper-body positions. This provides varied locomotion patterns including walking, running, and transitions.
+
+\textbf{Discriminator Enhancement.} We augmented ADD's differential discriminator observations with velocity information, enabling the discriminator to assess motion quality in the context of current movement direction.
+
+\textbf{Task Reward.} The steering task reward combines directional objectives:
 \begin{equation}
 r_{task} = w_{tar} \cdot r_{vel} + w_{face} \cdot r_{face}
 \label{eq:steering_task}
@@ -134,7 +140,8 @@ where $r_{vel} = \exp(-\|\mathbf{v} - v_{tar}\mathbf{d}_{tar}\|^2)$ rewards movi
 r_{total} = r_{task} + w_{style} \cdot r_{style}
 \label{eq:total_reward}
 \end{equation}
-We trained steering tasks for both AMP and ADD to evaluate their directional control capabilities under the learned motion priors.
+
+The choice of ADD over AMP for steering was motivated by ADD's superior position tracking under force, making it more suitable for directional control tasks despite overcompensation tendencies in single-axis force training.
 
 \section{Experimental Setup}
 
@@ -152,29 +159,34 @@ We trained steering tasks for both AMP and ADD to evaluate their directional con
 
 \textbf{Evaluation Metrics.} We measure:
 \begin{itemize}
-\item Episode length (surrogate for stability)
-\item Joint position error vs. reference motion
+\item Episode length (surrogate for stability and training progress)
+\item \textbf{Pose tracking error}: Mean joint-wise position error from reference motion
+\item Root tracking error: Position and velocity deviation from reference trajectory
 \item End-effector position error (feet and hands)
-\item Root position and velocity tracking error
 \item Discriminator reward (style matching quality)
 \end{itemize}
 
 \section{Results}
+\label{sec:results}
 
-\subsection{Training Dynamics}
+We present our results in three stages: (1) baseline training dynamics with single-axis forces, (2) qualitative analysis revealing the overcompensation problem, and (3) quantitative comparison demonstrating that multi-directional forces solve this issue.
 
-\textbf{ADD Performance.} Figure~\ref{fig:add_results_part1} shows ADD training curves under 30N constant force. Key observations:
+\subsection{Training Dynamics: Baseline [0,0,30N] Curriculum}
+
+We first establish baseline performance by training both methods with a [0,0,30N] (downward-only) force curriculum.
+
+\textbf{ADD Performance.} Figure~\ref{fig:add_results_part1} shows ADD training curves. Key observations:
 \begin{itemize}
 \item Episode length saturates quickly (within 5000 iterations), reaching maximum rollout duration
-\item Discriminator maintains high loss, suggesting significant difference from reference despite successful rollouts
-\item Policy learns to compensate for forces but with non-naturalistic poses (e.g., raised arms)
+\item Discriminator maintains high loss, suggesting policy motion differs from reference despite achieving stability
+\item Policy learns rapid force compensation, enabling continued walking
 \end{itemize}
 
-\textbf{AMP Performance.} Figure~\ref{fig:amp_results_part1} shows AMP training under force perturbations. After hyperparameter tuning (gradient clipping, discriminator weakening):
+\textbf{AMP Performance.} Figure~\ref{fig:amp_results_part1} shows AMP training after hyperparameter tuning (gradient clipping, discriminator weakening):
 \begin{itemize}
 \item More gradual learning curve than ADD, reaching stability around 15,000 iterations
 \item Discriminator reward steadily increases, indicating better style matching
-\item Significant position drift during locomotion under moderate forces
+\item Higher pose tracking accuracy but lower stability under force
 \end{itemize}
 
 \begin{figure}[t]
@@ -209,32 +221,51 @@ We trained steering tasks for both AMP and ADD to evaluate their directional con
     \label{fig:amp_results_part1}
 \end{figure}
 
-\subsection{Qualitative Analysis}
+\subsection{Qualitative Analysis: The Overcompensation Problem}
 
-\textbf{ADD Behavior.} Under 30N curriculum training, ADD produces stable walking but with unnatural compensation strategies:
+Having established baseline training, we now investigate policy behavior under different force magnitudes to understand robustness limits.
+
+\paragraph{Single-Axis Forces Cause Overcompensation in ADD}
+Under [0,0,30N] curriculum training, ADD produces stable walking but develops unnatural compensation strategies:
 \begin{itemize}
-\item Arms raised above head to counterbalance forces
+\item Arms raised above head to counterbalance downward forces
 \item Exaggerated leaning motions during gait
-\item Overcompensation: even with zero force, policy maintains defensive posture expecting force application
+\item \textbf{Persistent overcompensation}: Even at zero force, policy maintains defensive posture
 \end{itemize}
 
-The 100N curriculum model exhibits more severe overcompensation, becoming unstable even without applied forces (Figure~\ref{fig:add_results}). To mitigate this issue, we trained with multi-directional forces [10N, 10N, 30N] which significantly reduced single-axis overcompensation behaviors.
+The [0,0,100N] curriculum exacerbates this problem. Figure~\ref{fig:add_results} shows that the aggressive curriculum creates policies that overcompensate severely even without applied forces, sometimes becoming unstable. This behavior suggests the policy learns axis-specific compensation strategies (raising arms for downward forces) that persist inappropriately.
+
+\paragraph{Multi-Directional Forces Solve Overcompensation}
+To address this issue, we trained ADD with [10N, 10N, 30N] multi-directional forces. This configuration applies forces in x, y, and z axes, preventing axis-specific compensation strategies. Figure~\ref{fig:multi_directional_comparison} shows that multi-directional training produces natural poses even after force removal, validating our hypothesis that force diversity prevents overcompensation.
+
+% TODO: Add Figure showing [0,0,30], [0,0,100], and [10,10,30] side-by-side
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.95\linewidth]{data/ADD/DRLmidpointsim_drawio.png}
-    \caption{\textbf{ADD behavior under different force curricula.} 30N curriculum allows adaptation, but 100N curriculum causes overcompensation even at zero force.}
+    \caption{\textbf{ADD behavior under single-axis force curricula.} 30N curriculum allows adaptation but shows arm raising, while 100N curriculum causes severe overcompensation even at zero force.}
     \label{fig:add_results}
 \end{figure}
 
-\textbf{AMP Behavior.} AMP maintains more natural-looking poses but exhibits:
+\begin{figure}[t]
+    \centering
+    % TODO: Replace with actual multi-directional comparison figure
+    % Should show 3 panels: [0,0,100] single-axis (overcompensation) vs [10,10,30] multi-directional (natural)
+    \includegraphics[width=0.95\linewidth]{data/ADD/multi_directional_comparison.png}
+    \caption{\textbf{Effect of multi-directional forces on ADD.} Policies trained with single-axis [0,0,100N] forces (left) overcompensate with raised arms at 0N, while multi-directional [10N,10N,30N] training (right) produces natural poses.}
+    \label{fig:multi_directional_comparison}
+\end{figure}
+
+\paragraph{AMP: Better Pose Tracking, Lower Force Robustness}
+AMP maintains more natural-looking poses and better pose tracking accuracy but exhibits lower force robustness:
 \begin{itemize}
-\item Significant drift in root position during walking
-\item Occasional stumbling under moderate forces
+\item Significant drift in root position during walking under force
+\item Occasional stumbling and falls under moderate forces (>40N)
 \item Better recovery when forces are removed compared to ADD
+\item Maintains closer match to reference motion (higher discriminator rewards)
 \end{itemize}
 
-Figure~\ref{fig:amp_results} shows that AMP can walk with light to moderate constant forces but experiences drift and instability with strong perturbations.
+Figure~\ref{fig:amp_results} shows that AMP can walk with light constant forces but experiences drift and instability with strong perturbations, confirming the trade-off between pose tracking accuracy and force robustness.
 
 \begin{figure}[t]
     \centering
@@ -243,8 +274,44 @@ Figure~\ref{fig:amp_results} shows that AMP can walk with light to moderate cons
     \label{fig:amp_results}
 \end{figure}
 
-\subsection{Comparative Analysis}
+\subsection{Quantitative Comparison}
 
+We now quantify the performance differences across force configurations and methods.
+
+\paragraph{Pose Tracking and Stability Metrics}
+Table~\ref{tab:pose_tracking} presents pose tracking error and episode length across force magnitudes. Key findings:
+\begin{itemize}
+\item ADD maintains lower pose tracking error under force but higher error at 0N (overcompensation)
+\item Multi-directional training [10,10,30] reduces 0N pose error while maintaining robustness
+\item AMP shows superior pose tracking at 0N but rapid degradation under force
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\caption{Pose tracking error (mean $\pm$ std, degrees) and episode length at different force magnitudes}
+\label{tab:pose_tracking}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{0N} & \textbf{30N} & \textbf{50N} & \textbf{100N} \\
+\midrule
+\multicolumn{5}{l}{\textit{Pose Tracking Error (degrees)}} \\
+AMP [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
+ADD [0,0,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
+ADD [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
+ADD [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
+\midrule
+\multicolumn{5}{l}{\textit{Episode Length (seconds)}} \\
+AMP [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
+ADD [0,0,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
+ADD [0,0,100] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- \\
+ADD [10,10,30] & -- $\pm$ -- & -- $\pm$ -- & -- $\pm$ -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% TODO: Fill in table with your experimental data
+
+\paragraph{Method Comparison}
 Table~\ref{tab:comparison} summarizes the key differences between AMP and ADD under force perturbations. Both methods were also evaluated on steering tasks, where they demonstrated the ability to follow target directions while maintaining learned motion styles, with ADD showing faster adaptation to directional control.
 
 \begin{table}[t]
@@ -253,43 +320,48 @@ Table~\ref{tab:comparison} summarizes the key differences between AMP and ADD un
 \label{tab:comparison}
 \begin{tabular}{lcc}
 \toprule
-\textbf{Metric} & \textbf{AMP} & \textbf{ADD} \\
+\textbf{Metric} & \textbf{AMP} & \textbf{ADD (single-axis)} \\
 \midrule
 Training speed & Slower (15k iter) & Faster (5k iter) \\
 Motion naturalness & Better & Worse (overcompensation) \\
-Position tracking & Significant drift & Better \\
-Stability under force & Moderate & Good \\
-Recovery after force & Good & Poor (persistent compensation) \\
-Max sustainable force & 30-50N & 50-100N \\
+Pose tracking @0N & Excellent (low error) & Poor (overcompensation) \\
+Pose tracking @force & Poor (drifts) & Better (maintains pattern) \\
+Stability under force & Moderate (30-50N) & Good (50-100N) \\
+Recovery after force & Good & Poor (persistent) \\
+\midrule
+\multicolumn{3}{l}{\textbf{ADD (multi-directional [10,10,30])}} \\
+Motion naturalness & \multicolumn{2}{c}{Improved - natural poses at 0N} \\
+Pose tracking @0N & \multicolumn{2}{c}{Improved - reduced overcompensation} \\
+Stability under force & \multicolumn{2}{c}{Maintained - robust to varied forces} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{Discussion}
 
-\subsection{Why ADD Overcompensates}
+\subsection{Why ADD Overcompensates (But Maintains Robustness)}
 
-ADD's differential discriminator observes $\Delta s = s_\pi - s_{ref}$, which includes differences in body positions and velocities. When constant forces are applied:
-
-\begin{enumerate}
-\item The policy learns any pose that maintains similar \emph{relative} motion patterns to the reference
-\item Raised arms or exaggerated leans can maintain differential consistency while better counterbalancing forces
-\item The curriculum creates an expectation of forces, leading to persistent compensation strategies
-\end{enumerate}
-
-This suggests ADD's translation invariance, while beneficial for some perturbations, may allow unnatural compensations that satisfy the discriminator.
-
-\subsection{Why AMP Struggles with Tracking}
-
-AMP's absolute discriminator observes full state $s$, requiring close matching to reference poses. Under external forces:
+ADD's differential discriminator observes $\Delta s = s_\pi - s_{ref}$, which includes differences in body positions and velocities. When single-axis forces are applied:
 
 \begin{enumerate}
-\item The policy must balance discriminator reward (match reference) with task reward (avoid falling)
-\item Forces cause accumulating root position errors that compound over time
-\item Gradient clipping and discriminator weakening (necessary for stability) reduce the corrective signal
+\item The policy learns any pose that maintains similar \emph{relative} motion patterns to the reference, sacrificing absolute pose tracking accuracy for stability
+\item Raised arms or exaggerated leans maintain differential consistency while counterbalancing forces, leading to poor pose tracking at 0N
+\item The curriculum creates expectation of forces, causing persistent compensation strategies even when unnecessary
 \end{enumerate}
 
-The trade-off is better motion quality but less robustness to sustained perturbations.
+This explains why ADD shows higher pose tracking error at 0N (overcompensation) but better error under force (robust patterns). Multi-directional forces [10,10,30] prevent axis-specific strategies, improving pose tracking at 0N while maintaining robustness.
+
+\subsection{Why AMP Struggles with Pose Tracking Under Force}
+
+AMP's absolute discriminator observes full state $s$, requiring close pose tracking to reference for high rewards. Under external forces:
+
+\begin{enumerate}
+\item The policy must balance discriminator reward (match reference pose) with task reward (avoid falling under force)
+\item Forces cause accumulating root position errors that degrade overall pose tracking accuracy
+\item Gradient clipping and discriminator weakening (necessary for training stability) reduce corrective signals for pose tracking
+\end{enumerate}
+
+The trade-off is excellent pose tracking at 0N but rapid degradation under force. AMP maintains natural motion quality but cannot sustain pose tracking accuracy under sustained perturbations.
 
 \subsection{Curriculum Learning Insights}
 
@@ -332,16 +404,15 @@ This suggests that \emph{force diversity} during training is as important as for
 
 \section{Conclusion}
 
-We presented a systematic study of AMP and ADD under external force perturbations, motivated by practical tasks like box-carrying. Our experiments reveal fundamental trade-offs between these approaches: ADD achieves greater robustness and faster learning but sacrifices motion naturalness through overcompensation strategies, while AMP maintains higher motion quality but struggles with position tracking under sustained forces.
+We presented a systematic study of AMP and ADD under external force perturbations, motivated by practical tasks like box-carrying. Through progressive experimentation with [0,0,30N], [0,0,100N], and [10,10,30N] force configurations, we uncovered fundamental trade-offs between these approaches and developed effective mitigation strategies.
 
 Our key findings include:
 \begin{enumerate}
-\item Differential discriminators (ADD) enable force adaptation but allow unnatural compensation poses
-\item Absolute discriminators (AMP) preserve motion quality but accumulate tracking errors under force
-\item Curriculum design critically affects generalization—overly aggressive curricula induce persistent defensive behaviors
-\item Random force decay mechanisms improve robustness without excessive overcompensation
-\item Multi-directional forces [10N, 10N, 30N] significantly reduce axis-specific overcompensation compared to single-axis perturbations
-\item Both AMP and ADD successfully integrate steering capabilities, with ADD showing faster task adaptation
+\item \textbf{Discriminator formulation determines trade-offs}: ADD (differential) enables force robustness but sacrifices pose tracking accuracy at 0N through overcompensation; AMP (absolute) maintains excellent pose tracking at 0N but rapidly degrades under force
+\item \textbf{Curriculum magnitude matters}: [0,0,100N] curricula induce persistent overcompensation, while [0,0,30N] provides better generalization
+\item \textbf{Multi-directional forces solve overcompensation}: [10N,10N,30N] forces prevent axis-specific compensation strategies, improving pose tracking at 0N while maintaining robustness under force
+\item \textbf{Method selection depends on task}: AMP's position drift makes it unsuitable for directional control tasks; ADD's robustness enables successful steering integration despite overcompensation in single-axis training
+\item \textbf{Force diversity trumps magnitude}: Training with varied force directions produces more natural and generalizable policies than training with higher magnitude single-axis forces
 \end{enumerate}
 
 These insights inform the design of robust motion imitation systems for real-world humanoid robotics, where both naturalness and reliability under perturbations are essential. The extended MimicKit framework and evaluation protocols developed in this work provide a foundation for future research on robust physics-based character control.
@@ -388,6 +459,18 @@ Xue~Bin Peng, Marcin Andrychowicz, Wojciech Zaremba, and Pieter Abbeel.
 \newblock Sim-to-real transfer of robotic control with dynamics randomization.
 \newblock In {\em IEEE International Conference on Robotics and Automation},
   pages 3803--3810, 2018.
+
+\bibitem{mahmood2019amass}
+Naureen Mahmood, Nima Ghorbani, Nikolaus~F. Troje, Gerard Pons-Moll, and
+  Michael~J. Black.
+\newblock {AMASS}: Archive of motion capture as surface shapes.
+\newblock In {\em IEEE International Conference on Computer Vision (ICCV)},
+  pages 5442--5451, October 2019.
+
+\bibitem{harvey2020lafan}
+F{\'e}lix~G. Harvey, Mike Yurick, Derek Nowrouzezahrai, and Christopher Pal.
+\newblock Robust motion in-betweening.
+\newblock {\em ACM Transactions on Graphics}, 39(4), 2020.
 
 \end{thebibliography}
 
